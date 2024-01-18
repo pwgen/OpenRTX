@@ -80,7 +80,9 @@ target_include_directories(app
 
     subprojects/codec2
     subprojects/codec2/src
-
+ 
+    subprojects/littlefs
+    
     lib/minmea/include
     lib/qdec/include
 )
@@ -149,6 +151,9 @@ target_sources(app
     subprojects/codec2/src/pack.c
     subprojects/codec2/src/codebooknewamp1.c
     subprojects/codec2/src/codebooknewamp1_energy.c
+
+#    subprojects/littlefs/lfs.c
+#    subprojects/littlefs/lfs_util.c
 
     lib/minmea/minmea.c
 )

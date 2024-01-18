@@ -19,6 +19,7 @@
  ***************************************************************************/
 
 #include <openrtx.h>
+#define CONFIG_FS_LITTLEFS_LOOKAHEAD_SIZE 4094
 
 #ifdef PLATFORM_MD9600
 #include <interfaces/platform.h>

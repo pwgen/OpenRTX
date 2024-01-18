@@ -25,6 +25,13 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/usb/usb_device.h>
 #include <ctype.h>
+#include <zephyr/device.h>
+#include <zephyr/fs/fs.h>
+#define CONFIG_FS_LITTLEFS_LOOKAHEAD_SIZE 2048
+#include <zephyr/fs/littlefs.h>
+#include <zephyr/storage/flash_map.h>
+
+
 
 #ifdef CONFIG_ARCH_POSIX
 #include <unistd.h>
@@ -453,22 +460,24 @@ void cmdshell_init(void)
 }
 
 
+struct fs_littlefs lfsfs;
+static struct fs_mount_t __mp = {
+	.type = FS_LITTLEFS,
+	.fs_data = &lfsfs,
+	.flags = FS_MOUNT_FLAG_USE_DISK_ACCESS,
+};
+
 int cmdshell_main(void)
 {
-
-#if DT_NODE_HAS_COMPAT(DT_CHOSEN(zephyr_shell_uart), zephyr_cdc_acm_uart)
-	const struct device *dev;
-	uint32_t dtr = 0;
-
-	dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_shell_uart));
-	if (!device_is_ready(dev) || usb_enable(NULL)) {
-		return 0;
+	int rc=1;
+	struct fs_mount_t *mountpoint = &__mp;
+//	rc = fs_mount(mountpoint);
+	if (rc < 0) {
+		LOG_PRINTK("FAIL: mount id %" PRIuPTR " at %s: %d\n",(uintptr_t)mountpoint->storage_dev, mountpoint->mnt_point, rc);
+		return rc;
 	}
 
-	while (!dtr) {
-		uart_line_ctrl_get(dev, UART_LINE_CTRL_DTR, &dtr);
-		k_sleep(K_MSEC(100));
-	}
-#endif
+printk("Shell main\n");
+
 	return 0;
 }

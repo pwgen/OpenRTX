@@ -22,7 +22,7 @@
 #define OPENRTX_H
 
 #include <stddef.h>
-
+#define CONFIG_FS_LITTLEFS_LOOKAHEAD_SIZE 4094
 /**
  * Initialisation of all the OpenRTX components, to be called before the main
  * entrypoint.
