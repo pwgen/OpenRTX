@@ -77,8 +77,8 @@ static const settings_t default_settings =
     4,                // Squelch level, 4 = S3
     0,                // Vox level
     0,                // UTC Timezone
-    false,            // GPS enabled
-    "",               // Empty callsign
+    true,            // GPS enabled
+    "SP4SS",               // Empty callsign
     TIMER_30S,        // 30 seconds
     0,                // M17 CAN
     0,                // Voice prompts off

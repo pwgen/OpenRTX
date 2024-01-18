@@ -26,3 +26,5 @@ manifest:
       west-commands: west/west-commands.yml
       groups:
         - hal
+#    - name: mbedtls
+#      path: modules/crypto/mbedtls
