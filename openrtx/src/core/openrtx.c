@@ -29,6 +29,7 @@
 #include <openrtx.h>
 #include <threads.h>
 #include <state.h>
+#include <cmdshell.h>
 #include <ui.h>
 #ifdef PLATFORM_LINUX
 #include <stdlib.h>
@@ -41,6 +42,7 @@ void openrtx_init()
     state.devStatus = STARTUP;
 
     platform_init();    // Initialize low-level platform drivers
+    cmdshell_main();
     state_init();       // Initialize radio state
 
     gfx_init();         // Initialize display and graphics driver

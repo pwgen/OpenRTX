@@ -88,8 +88,9 @@ target_include_directories(app
 target_sources(app
   PRIVATE
 
-    openrtx/src/main.c
-    openrtx/src/core/state.c
+  openrtx/src/main.c
+  openrtx/src/core/cmdshell.c
+  openrtx/src/core/state.c
     openrtx/src/core/threads.c
     openrtx/src/core/battery.c
     openrtx/src/core/graphics.c
