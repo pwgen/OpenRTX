@@ -1,6 +1,16 @@
 # OpenRTX
 ## Modular Open Source Radio Firmware
 
+# My Changes
+enable shell on tttyACM0
+add radio command
+uart. radio status
+.
+.
+radio help
+.
+
+
 OpenRTX is a free and open source firmware for digital amateur radio devices, top-down designed
 with modularity, flexibility and performance in mind.
 
