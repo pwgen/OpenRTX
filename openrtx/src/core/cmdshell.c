@@ -17,21 +17,24 @@
  *   You should have received a copy of the GNU General Public License     *
  *   along with this program; if not, see <http://www.gnu.org/licenses/>   *
  ***************************************************************************/
+#include <version.h>
+#include <stdlib.h>
+#include <ctype.h>
+#include <stdio.h>
+
 #include <zephyr/kernel.h>
 #include <zephyr/shell/shell.h>
-#include <version.h>
 #include <zephyr/logging/log.h>
-#include <stdlib.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/usb/usb_device.h>
-#include <ctype.h>
 #include <zephyr/device.h>
 #include <zephyr/fs/fs.h>
+
 #define CONFIG_FS_LITTLEFS_LOOKAHEAD_SIZE 2048
 #include <zephyr/fs/littlefs.h>
 #include <zephyr/storage/flash_map.h>
 
-
+#include <state.h>
 
 #ifdef CONFIG_ARCH_POSIX
 #include <unistd.h>
@@ -105,12 +108,17 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_log_test,
 
 SHELL_CMD_REGISTER(log_test, &sub_log_test, "Log test", NULL);
 
-static int cmd_demo_ping(const struct shell *sh, size_t argc, char **argv)
+
+static int cmd_radio_status(const struct shell *sh, size_t argc, char **argv)
 {
 	ARG_UNUSED(argc);
 	ARG_UNUSED(argv);
 
-	shell_print(sh, "pong");
+	shell_print(sh, "Callsign %s",state.settings.callsign);
+	shell_print(sh, "GPS %i",state.settings.gps_enabled);
+	shell_print(sh, "rssi %f",state.rssi);
+	shell_print(sh, "Brightness  rssi %i",state.settings.brightness);
+	shell_print(sh, "channel %i",state.channel.tx_frequency);
 
 	return 0;
 }
@@ -238,6 +246,49 @@ static int cmd_demo_params(const struct shell *sh, size_t argc, char **argv)
 
 	return 0;
 }
+static int cmd_radio_frequency(const struct shell *sh, size_t argc, char **argv)
+{
+	float frequency=0;
+	shell_print(sh, "Frequency argc = %zd", argc);
+	for (size_t cnt = 0; cnt < argc; cnt++) {
+		shell_print(sh, "  argv[%zd] = %s", cnt, argv[cnt]);
+	}
+	sscanf(argv[1],"%f",&frequency);
+shell_print(sh, "Set Frequency %f", frequency*1000);
+	state.channel.tx_frequency=frequency;
+	return 0;
+}
+static int cmd_radio_volume(const struct shell *sh, size_t argc, char **argv)
+{
+	shell_print(sh, "Volumeargc = %zd", argc);
+	for (size_t cnt = 0; cnt < argc; cnt++) {
+		shell_print(sh, "  argv[%zd] = %s", cnt, argv[cnt]);
+	}
+
+	return 0;
+}
+static int cmd_radio_bright(const struct shell *sh, size_t argc, char **argv)
+{
+	uint8_t brightness=0;
+	shell_print(sh, "Bright argc = %zd", argc);
+	for (size_t cnt = 0; cnt < argc; cnt++) {
+		shell_print(sh, "  argv[%zd] = %s", cnt, argv[cnt]);
+	}
+//	state.settings.brightness = a2i(argv[1]);
+	sscanf(argv[1],"%i",&brightness);
+	shell_print(sh, "  Bright %i ", brightness);
+	state.settings.brightness=brightness;
+	return 0;
+}
+static int cmd_radio_params(const struct shell *sh, size_t argc, char **argv)
+{
+	shell_print(sh, "argc = %zd", argc);
+	for (size_t cnt = 0; cnt < argc; cnt++) {
+		shell_print(sh, "  argv[%zd] = %s", cnt, argv[cnt]);
+	}
+	
+	return 0;
+}
 
 static int cmd_demo_hexdump(const struct shell *sh, size_t argc, char **argv)
 {
@@ -260,172 +311,29 @@ static int cmd_version(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
-#define DEFAULT_PASSWORD "zephyr"
-
-static void login_init(void)
-{
-	printk("Shell Login Demo\nHint: password = %s\n", DEFAULT_PASSWORD);
-	if (!CONFIG_SHELL_CMD_ROOT[0]) {
-		shell_set_root_cmd("login");
-	}
-}
-
-static int check_passwd(char *passwd)
-{
-	/* example only -- not recommended for production use */
-	return strcmp(passwd, DEFAULT_PASSWORD);
-}
-
-static int cmd_login(const struct shell *sh, size_t argc, char **argv)
-{
-	static uint32_t attempts;
-
-	if (check_passwd(argv[1]) != 0) {
-		shell_error(sh, "Incorrect password!");
-		attempts++;
-		if (attempts > 3) {
-			k_sleep(K_SECONDS(attempts));
-		}
-		return -EINVAL;
-	}
-
-	/* clear history so password not visible there */
-	z_shell_history_purge(sh->history);
-	shell_obscure_set(sh, false);
-	shell_set_root_cmd(NULL);
-	shell_prompt_change(sh, "uart:~$ ");
-	shell_print(sh, "Shell Login Demo\n");
-	shell_print(sh, "Hit tab for help.\n");
-	attempts = 0;
-	return 0;
-}
-
-static int cmd_logout(const struct shell *sh, size_t argc, char **argv)
-{
-	shell_set_root_cmd("login");
-	shell_obscure_set(sh, true);
-	shell_prompt_change(sh, "login: ");
-	shell_print(sh, "\n");
-	return 0;
-}
-
-static int set_bypass(const struct shell *sh, shell_bypass_cb_t bypass)
-{
-	static bool in_use;
-
-	if (bypass && in_use) {
-		shell_error(sh, "Sample supports setting bypass on single instance.");
-
-		return -EBUSY;
-	}
-
-	in_use = !in_use;
-	if (in_use) {
-		shell_print(sh, "Bypass started, press ctrl-x ctrl-q to escape");
-		in_use = true;
-	}
-
-	shell_set_bypass(sh, bypass);
-
-	return 0;
-}
-
-#define CHAR_1 0x18
-#define CHAR_2 0x11
-
-static void bypass_cb(const struct shell *sh, uint8_t *data, size_t len)
-{
-	static uint8_t tail;
-	bool escape = false;
-
-	/* Check if escape criteria is met. */
-	if (tail == CHAR_1 && data[0] == CHAR_2) {
-		escape = true;
-	} else {
-		for (int i = 0; i < (len - 1); i++) {
-			if (data[i] == CHAR_1 && data[i + 1] == CHAR_2) {
-				escape = true;
-				break;
-			}
-		}
-	}
-
-	if (escape) {
-		shell_print(sh, "Exit bypass");
-		set_bypass(sh, NULL);
-		tail = 0;
-		return;
-	}
-
-	/* Store last byte for escape sequence detection */
-	tail = data[len - 1];
-
-	/* Do the data processing. */
-	for (int i = 0; i < len; i++) {
-		shell_fprintf(sh, SHELL_INFO, "%02x ", data[i]);
-	}
-	shell_fprintf(sh, SHELL_INFO, "| ");
-
-	for (int i = 0; i < len; i++) {
-		shell_fprintf(sh, SHELL_INFO, "%c", data[i]);
-	}
-	shell_fprintf(sh, SHELL_INFO, "\n");
-
-}
-
-static int cmd_bypass(const struct shell *sh, size_t argc, char **argv)
-{
-	return set_bypass(sh, bypass_cb);
-}
-
-static int cmd_dict(const struct shell *sh, size_t argc, char **argv,
-		    void *data)
-{
-	int val = (intptr_t)data;
-
-	shell_print(sh, "(syntax, value) : (%s, %d)", argv[0], val);
-
-	return 0;
-}
-
-SHELL_SUBCMD_DICT_SET_CREATE(sub_dict_cmds, cmd_dict,
-	(value_0, 0, "value 0"), (value_1, 1, "value 1"),
-	(value_2, 2, "value 2"), (value_3, 3, "value 3")
-);
-
-SHELL_STATIC_SUBCMD_SET_CREATE(sub_demo,
-	SHELL_CMD(dictionary, &sub_dict_cmds, "Dictionary commands", NULL),
-	SHELL_CMD(hexdump, NULL, "Hexdump params command.", cmd_demo_hexdump),
-	SHELL_CMD(params, NULL, "Print params command.", cmd_demo_params),
-	SHELL_CMD(ping, NULL, "Ping command.", cmd_demo_ping),
-	SHELL_CMD(board, NULL, "Show board name command.", cmd_demo_board),
-#if defined CONFIG_SHELL_GETOPT
-	SHELL_CMD(getopt_thread_safe, NULL,
-		  "Cammand using getopt in thread safe way"
-		  " looking for: \"abhc:\".",
-		  cmd_demo_getopt_ts),
-	SHELL_CMD(getopt, NULL, "Cammand using getopt in non thread safe way"
-		  " looking for: \"abhc:\".\n", cmd_demo_getopt),
-#endif
-	SHELL_SUBCMD_SET_END /* Array terminated. */
-);
 
 SHELL_STATIC_SUBCMD_SET_CREATE(sub_radio,
-	SHELL_CMD(ping, NULL, "Ping command.", cmd_demo_ping),
+	SHELL_CMD(status, NULL, "Status command.", cmd_radio_status),
+	SHELL_CMD(freq, NULL, "Set Frequency.", cmd_radio_frequency),
+	SHELL_CMD(volume, NULL, "Set Volume.", cmd_radio_volume),
+	SHELL_CMD(bright, NULL, "Set Bright.", cmd_radio_bright),
+	
 	SHELL_SUBCMD_SET_END /* Array terminated. */
+
 );
 
-SHELL_CMD_REGISTER(demo, &sub_demo, "Demo commands", NULL);
+//SHELL_CMD_REGISTER(demo, &sub_demo, "Demo commands", NULL);
+SHELL_CMD_REGISTER(radio, &sub_radio, "Radio commands", NULL);
 
 SHELL_CMD_ARG_REGISTER(version, NULL, "Show kernel version", cmd_version, 1, 0);
 
-SHELL_CMD_ARG_REGISTER(bypass, NULL, "Bypass shell", cmd_bypass, 1, 0);
+//SHELL_CMD_ARG_REGISTER(bypass, NULL, "Bypass shell", cmd_bypass, 1, 0);
 
-SHELL_COND_CMD_ARG_REGISTER(CONFIG_SHELL_START_OBSCURED, login, NULL,
-			    "<password>", cmd_login, 2, 0);
+//SHELL_COND_CMD_ARG_REGISTER(CONFIG_SHELL_START_OBSCURED, login, NULL,
+//			    "<password>", cmd_login, 2, 0);
 
-SHELL_COND_CMD_REGISTER(CONFIG_SHELL_START_OBSCURED, logout, NULL,
-			"Log out.", cmd_logout);
+//SHELL_COND_CMD_REGISTER(CONFIG_SHELL_START_OBSCURED, logout, NULL,
+//			"Log out.", cmd_logout);
 
 
 /* Create a set of commands. Commands to this set are added using @ref SHELL_SUBCMD_ADD
@@ -470,13 +378,13 @@ static struct fs_mount_t __mp = {
 int cmdshell_main(void)
 {
 	int rc=1;
-	struct fs_mount_t *mountpoint = &__mp;
+/*	struct fs_mount_t *mountpoint = &__mp;
 //	rc = fs_mount(mountpoint);
 	if (rc < 0) {
 		LOG_PRINTK("FAIL: mount id %" PRIuPTR " at %s: %d\n",(uintptr_t)mountpoint->storage_dev, mountpoint->mnt_point, rc);
 		return rc;
 	}
-
+*/
 printk("Shell main\n");
 
 	return 0;
