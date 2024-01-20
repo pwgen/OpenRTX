@@ -31,10 +31,12 @@
 #include <zephyr/fs/fs.h>
 
 #define CONFIG_FS_LITTLEFS_LOOKAHEAD_SIZE 2048
-#include <zephyr/fs/littlefs.h>
+//#include <zephyr/fs/littlefs.h>
 #include <zephyr/storage/flash_map.h>
 
 #include <state.h>
+#include <SA8x8.h>
+#include <interfaces/radio.h>
 
 #ifdef CONFIG_ARCH_POSIX
 #include <unistd.h>
@@ -56,57 +58,6 @@ void timer_expired_handler(struct k_timer *timer)
 
 K_TIMER_DEFINE(log_timer, timer_expired_handler, NULL);
 
-static int cmd_log_test_start(const struct shell *sh, size_t argc,
-			      char **argv, uint32_t period)
-{
-	ARG_UNUSED(argv);
-
-	k_timer_start(&log_timer, K_MSEC(period), K_MSEC(period));
-	shell_print(sh, "Log test started\n");
-
-	return 0;
-}
-
-static int cmd_log_test_start_demo(const struct shell *sh, size_t argc,
-				   char **argv)
-{
-	return cmd_log_test_start(sh, argc, argv, 200);
-}
-
-static int cmd_log_test_start_flood(const struct shell *sh, size_t argc,
-				    char **argv)
-{
-	return cmd_log_test_start(sh, argc, argv, 10);
-}
-
-static int cmd_log_test_stop(const struct shell *sh, size_t argc,
-			     char **argv)
-{
-	ARG_UNUSED(argc);
-	ARG_UNUSED(argv);
-
-	k_timer_stop(&log_timer);
-	shell_print(sh, "Log test stopped");
-
-	return 0;
-}
-
-SHELL_STATIC_SUBCMD_SET_CREATE(sub_log_test_start,
-	SHELL_CMD_ARG(demo, NULL,
-		  "Start log timer which generates log message every 200ms.",
-		  cmd_log_test_start_demo, 1, 0),
-	SHELL_CMD_ARG(flood, NULL,
-		  "Start log timer which generates log message every 10ms.",
-		  cmd_log_test_start_flood, 1, 0),
-	SHELL_SUBCMD_SET_END /* Array terminated. */
-);
-SHELL_STATIC_SUBCMD_SET_CREATE(sub_log_test,
-	SHELL_CMD_ARG(start, &sub_log_test_start, "Start log test", NULL, 2, 0),
-	SHELL_CMD_ARG(stop, NULL, "Stop log test.", cmd_log_test_stop, 1, 0),
-	SHELL_SUBCMD_SET_END /* Array terminated. */
-);
-
-SHELL_CMD_REGISTER(log_test, &sub_log_test, "Log test", NULL);
 
 
 static int cmd_radio_status(const struct shell *sh, size_t argc, char **argv)
@@ -119,157 +70,62 @@ static int cmd_radio_status(const struct shell *sh, size_t argc, char **argv)
 	shell_print(sh, "rssi %f",state.rssi);
 	shell_print(sh, "Brightness  rssi %i",state.settings.brightness);
 	shell_print(sh, "channel %i",state.channel.tx_frequency);
-
-	return 0;
-}
-
-static int cmd_demo_board(const struct shell *sh, size_t argc, char **argv)
-{
-	ARG_UNUSED(argc);
-	ARG_UNUSED(argv);
-
 	shell_print(sh, CONFIG_BOARD);
 
 	return 0;
 }
 
-#if defined CONFIG_SHELL_GETOPT
-/* Thread save usage */
-static int cmd_demo_getopt_ts(const struct shell *sh, size_t argc,
-			      char **argv)
-{
-	struct getopt_state *state;
-	char *cvalue = NULL;
-	int aflag = 0;
-	int bflag = 0;
-	int c;
-
-	while ((c = getopt(argc, argv, "abhc:")) != -1) {
-		state = getopt_state_get();
-		switch (c) {
-		case 'a':
-			aflag = 1;
-			break;
-		case 'b':
-			bflag = 1;
-			break;
-		case 'c':
-			cvalue = state->optarg;
-			break;
-		case 'h':
-			/* When getopt is active shell is not parsing
-			 * command handler to print help message. It must
-			 * be done explicitly.
-			 */
-			shell_help(sh);
-			return SHELL_CMD_HELP_PRINTED;
-		case '?':
-			if (state->optopt == 'c') {
-				shell_print(sh,
-					"Option -%c requires an argument.",
-					state->optopt);
-			} else if (isprint(state->optopt) != 0) {
-				shell_print(sh,
-					"Unknown option `-%c'.",
-					state->optopt);
-			} else {
-				shell_print(sh,
-					"Unknown option character `\\x%x'.",
-					state->optopt);
-			}
-			return 1;
-		default:
-			break;
-		}
-	}
-
-	shell_print(sh, "aflag = %d, bflag = %d", aflag, bflag);
-	return 0;
-}
-
-static int cmd_demo_getopt(const struct shell *sh, size_t argc,
-			      char **argv)
-{
-	char *cvalue = NULL;
-	int aflag = 0;
-	int bflag = 0;
-	int c;
-
-	while ((c = getopt(argc, argv, "abhc:")) != -1) {
-		switch (c) {
-		case 'a':
-			aflag = 1;
-			break;
-		case 'b':
-			bflag = 1;
-			break;
-		case 'c':
-			cvalue = optarg;
-			break;
-		case 'h':
-			/* When getopt is active shell is not parsing
-			 * command handler to print help message. It must
-			 * be done explicitly.
-			 */
-			shell_help(sh);
-			return SHELL_CMD_HELP_PRINTED;
-		case '?':
-			if (optopt == 'c') {
-				shell_print(sh,
-					"Option -%c requires an argument.",
-					optopt);
-			} else if (isprint(optopt) != 0) {
-				shell_print(sh, "Unknown option `-%c'.",
-					optopt);
-			} else {
-				shell_print(sh,
-					"Unknown option character `\\x%x'.",
-					optopt);
-			}
-			return 1;
-		default:
-			break;
-		}
-	}
-
-	shell_print(sh, "aflag = %d, bflag = %d", aflag, bflag);
-	return 0;
-}
-#endif
-
-static int cmd_demo_params(const struct shell *sh, size_t argc, char **argv)
-{
-	shell_print(sh, "argc = %zd", argc);
-	for (size_t cnt = 0; cnt < argc; cnt++) {
-		shell_print(sh, "  argv[%zd] = %s", cnt, argv[cnt]);
-	}
-
-	return 0;
-}
 static int cmd_radio_frequency(const struct shell *sh, size_t argc, char **argv)
 {
-	float frequency=0;
+	
+	float txfrequency=0;
+	float rxfrequency=0;
 	shell_print(sh, "Frequency argc = %zd", argc);
 	for (size_t cnt = 0; cnt < argc; cnt++) {
 		shell_print(sh, "  argv[%zd] = %s", cnt, argv[cnt]);
 	}
-	sscanf(argv[1],"%f",&frequency);
-shell_print(sh, "Set Frequency %f", frequency*1000);
-	state.channel.tx_frequency=frequency;
+	sscanf(argv[1],"%f",&txfrequency);
+	sscanf(argv[2],"%f",&rxfrequency);
+    shell_print(sh, "Set Frequency TX  %f RX %f", txfrequency*1000000,rxfrequency*1000000);
+	state.channel.tx_frequency=txfrequency*1000000;
+	state.channel.rx_frequency=rxfrequency*1000000;
 	return 0;
 }
 static int cmd_radio_volume(const struct shell *sh, size_t argc, char **argv)
 {
+	int vol=0;
+
 	shell_print(sh, "Volumeargc = %zd", argc);
 	for (size_t cnt = 0; cnt < argc; cnt++) {
 		shell_print(sh, "  argv[%zd] = %s", cnt, argv[cnt]);
 	}
+	sscanf(argv[1],"%i",&vol);
+	state.settings.vpLevel=vol;
+	return 0;
+}
+static int cmd_radio_audioon(const struct shell *sh, size_t argc, char **argv)
+{
+	shell_print(sh, "txon argc = %zd", argc);
+	for (size_t cnt = 0; cnt < argc; cnt++) {
+		shell_print(sh, "  argv[%zd] = %s", cnt, argv[cnt]);
+	}
+	sa8x8_setAudio(true);
 
+	return 0;
+}
+static int cmd_radio_audiooff(const struct shell *sh, size_t argc, char **argv)
+{
+	shell_print(sh, "txoff argc = %zd", argc);
+	for (size_t cnt = 0; cnt < argc; cnt++) {
+		shell_print(sh, "  argv[%zd] = %s", cnt, argv[cnt]);
+	}
+//	radio_enableRx();
+	sa8x8_setAudio(false);
 	return 0;
 }
 static int cmd_radio_bright(const struct shell *sh, size_t argc, char **argv)
 {
-	uint8_t brightness=0;
+	int brightness=0;
 	shell_print(sh, "Bright argc = %zd", argc);
 	for (size_t cnt = 0; cnt < argc; cnt++) {
 		shell_print(sh, "  argv[%zd] = %s", cnt, argv[cnt]);
@@ -290,17 +146,6 @@ static int cmd_radio_params(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
-static int cmd_demo_hexdump(const struct shell *sh, size_t argc, char **argv)
-{
-	shell_print(sh, "argc = %zd", argc);
-	for (size_t cnt = 0; cnt < argc; cnt++) {
-		shell_print(sh, "argv[%zd]", cnt);
-		shell_hexdump(sh, argv[cnt], strlen(argv[cnt]));
-	}
-
-	return 0;
-}
-
 static int cmd_version(const struct shell *sh, size_t argc, char **argv)
 {
 	ARG_UNUSED(argc);
@@ -310,35 +155,133 @@ static int cmd_version(const struct shell *sh, size_t argc, char **argv)
 
 	return 0;
 }
+static int cmd_radio_poke(const struct shell *sh, size_t argc, char **argv)
+{
+	int reg;
+	int addr;
+	sscanf(argv[1],"%2x",&addr);
+	sscanf(argv[2],"%4x",&reg);
+	shell_print(sh, " %2x %4x %i %i ",addr,reg,addr,reg);
+	sa8x8_writeAT1846Sreg((uint8_t) addr ,(uint16_t) reg);
+	shell_print(sh, " %2x %4x",addr,reg);
+	
 
+	return 0;
+}
+static int cmd_radio_voicesource(const struct shell *sh, size_t argc, char **argv)
+{
+	ARG_UNUSED(argc);
+	ARG_UNUSED(argv);
 
-SHELL_STATIC_SUBCMD_SET_CREATE(sub_radio,
+	shell_print(sh, "Zephyr version %s", KERNEL_VERSION_STRING);
+
+	return 0;
+}
+static int cmd_radio_peek(const struct shell *sh, size_t argc, char **argv)
+{
+	int  addr;
+	uint16_t reg;
+	sscanf(argv[1],"%2x",&addr);
+	//shell_print(sh, " peek  %s  %4x ",argv[1], addr);
+//	sscanf(argv[1],"%4x",&reg);
+	reg=sa8x8_readAT1846Sreg((uint16_t) addr);
+	shell_print(sh, " peek  %2x  %4x ",addr, reg);
+	return 0;
+}
+
+static int cmd_radio_txpower(const struct shell *sh, size_t argc, char **argv)
+{
+	float txpower;
+	int pgagain;
+	sscanf(argv[1],"%f",&txpower);
+	sscanf(argv[2],"%i",&pgagain);
+	//setPgaGain(pgagain);
+	sa8x8_writeAT1846Sreg(0x0a,pgagain);
+	shell_print(sh, "TX power %f",txpower);
+	sa8x8_setTxPower(txpower);
+	return 0;
+}
+static int cmd_radio_tx(const struct shell *sh, size_t argc, char **argv)
+{
+//	shell_print(sh, "txoff argc = %zd", argc);
+	radio_enableTx();
+//	sa8x8_setAudio(false);
+	return 0;
+}
+static int cmd_radio_rx(const struct shell *sh, size_t argc, char **argv)
+{
+//	shell_print(sh, "txoff argc = %zd", argc);
+	radio_enableRx();
+//	sa8x8_setAudio(false);
+	return 0;
+}
+static int cmd_radio_mic(const struct shell *sh, size_t argc, char **argv)
+{
+	sa8x8_writeAT1846Sreg(0x3a,0x4000);
+	return 0;
+}
+static int cmd_radio_dsp(const struct shell *sh, size_t argc, char **argv)
+{
+	sa8x8_writeAT1846Sreg(0x79,0xd932);
+	sa8x8_writeAT1846Sreg(0x3a,0x3000);
+	return 0;
+}
+static int cmd_radio_nvram(const struct shell *sh, size_t argc, char **argv)
+{
+	shell_print(sh, "Checking nvram");
+	return 0;
+}
+static int cmd_radio_dmtf(const struct shell *sh, size_t argc, char **argv)
+{
+	int mode,time1 ,time2;
+	uint16_t reg;
+	sscanf(argv[1],"%1x",&mode);
+	sscanf(argv[2],"%1x",&time1);
+	sscanf(argv[3],"%1x",&time2);
+	reg=mode<<8;
+	reg=reg + (time1<<4)  + time2; 
+	sa8x8_writeAT1846Sreg(0x63,reg);
+	shell_print(sh, "Checking nvram");
+	return 0;
+}
+static int cmd_radio_tone(const struct shell *sh, size_t argc, char **argv)
+{
+	int tone1,tone2;
+	uint16_t reg;
+	sscanf(argv[1],"%4x",&tone1);
+	sscanf(argv[2],"%4x",&tone2);
+	
+	sa8x8_writeAT1846Sreg(0x35,tone1);
+	sa8x8_writeAT1846Sreg(0x36,tone1);
+	return 0;
+}
+	SHELL_STATIC_SUBCMD_SET_CREATE(sub_radio,
 	SHELL_CMD(status, NULL, "Status command.", cmd_radio_status),
-	SHELL_CMD(freq, NULL, "Set Frequency.", cmd_radio_frequency),
+	SHELL_CMD(freq, NULL, "Set Frequency  tx in Mhz rx in Mhz  radio freq 144.5 145.0 ", cmd_radio_frequency),
 	SHELL_CMD(volume, NULL, "Set Volume.", cmd_radio_volume),
 	SHELL_CMD(bright, NULL, "Set Bright.", cmd_radio_bright),
+	SHELL_CMD(aoff, NULL, "Set Audio off.", cmd_radio_audiooff),
+	SHELL_CMD(aon, NULL, "Set Audio on.", cmd_radio_audioon),
+	SHELL_CMD(peek, NULL, "Peek on sa8x8.", cmd_radio_peek),
+	SHELL_CMD(poke, NULL, "poke on sa868.", cmd_radio_poke),
+	SHELL_CMD(source, NULL, "Select voice source .", cmd_radio_voicesource),
+	SHELL_CMD(txpower, NULL, "Set txpoweramp radio txpower 1.0| 0.0 [0 1 2 4 8 16 32 63].", cmd_radio_txpower),
+	SHELL_CMD(tx, NULL, "Transmit", cmd_radio_tx),
+	SHELL_CMD(rx, NULL, "Receive", cmd_radio_rx),
+	SHELL_CMD(mic, NULL, "Set audio source to mic", cmd_radio_mic),
+	SHELL_CMD(dsp, NULL, "Set audio source DSP", cmd_radio_dsp),
+	SHELL_CMD(nv, NULL, "Checking nvram", cmd_radio_nvram),
+	SHELL_CMD(dtmf, NULL, "Set dtmf register", cmd_radio_dsp),
+	SHELL_CMD(tone, NULL, "Cset tone 1 and tone 2", cmd_radio_tone),
 	
 	SHELL_SUBCMD_SET_END /* Array terminated. */
 
 );
 
-//SHELL_CMD_REGISTER(demo, &sub_demo, "Demo commands", NULL);
 SHELL_CMD_REGISTER(radio, &sub_radio, "Radio commands", NULL);
 
 SHELL_CMD_ARG_REGISTER(version, NULL, "Show kernel version", cmd_version, 1, 0);
 
-//SHELL_CMD_ARG_REGISTER(bypass, NULL, "Bypass shell", cmd_bypass, 1, 0);
-
-//SHELL_COND_CMD_ARG_REGISTER(CONFIG_SHELL_START_OBSCURED, login, NULL,
-//			    "<password>", cmd_login, 2, 0);
-
-//SHELL_COND_CMD_REGISTER(CONFIG_SHELL_START_OBSCURED, logout, NULL,
-//			"Log out.", cmd_logout);
-
-
-/* Create a set of commands. Commands to this set are added using @ref SHELL_SUBCMD_ADD
- * and @ref SHELL_SUBCMD_COND_ADD.
- */
 SHELL_SUBCMD_SET_CREATE(sub_section_cmd, (section_cmd));
 
 static int cmd1_handler(const struct shell *sh, size_t argc, char **argv)
@@ -352,14 +295,9 @@ static int cmd1_handler(const struct shell *sh, size_t argc, char **argv)
 	return 0;
 }
 
-/* Create a set of subcommands for "section_cmd cm1". */
 SHELL_SUBCMD_SET_CREATE(sub_section_cmd1, (section_cmd, cmd1));
-
-/* Add command to the set. Subcommand set is identify by parent shell command. */
 SHELL_SUBCMD_ADD((section_cmd), cmd1, &sub_section_cmd1, "help for cmd1", cmd1_handler, 1, 0);
-
-SHELL_CMD_REGISTER(section_cmd, &sub_section_cmd,
-		   "Demo command using section for subcommand registration", NULL);
+SHELL_CMD_REGISTER(section_cmd, &sub_section_cmd, "Demo command using section for subcommand registration", NULL);
 
 
 void cmdshell_init(void)
@@ -368,12 +306,12 @@ void cmdshell_init(void)
 }
 
 
-struct fs_littlefs lfsfs;
-static struct fs_mount_t __mp = {
-	.type = FS_LITTLEFS,
-	.fs_data = &lfsfs,
-	.flags = FS_MOUNT_FLAG_USE_DISK_ACCESS,
-};
+//struct fs_littlefs lfsfs;
+//static struct fs_mount_t __mp = {
+//	.type = FS_LITTLEFS,
+//	.fs_data = &lfsfs,
+//	.flags = FS_MOUNT_FLAG_USE_DISK_ACCESS,
+//};
 
 int cmdshell_main(void)
 {
