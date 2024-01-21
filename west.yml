@@ -26,5 +26,11 @@ manifest:
       west-commands: west/west-commands.yml
       groups:
         - hal
-#    - name: mbedtls
+    - name: LittleFS
+      path: submodules/littlefs
+#  url: https://github.com/yashi/module-sample
+#  revision: main
+
+
+  #    - name: mbedtls
 #      path: modules/crypto/mbedtls

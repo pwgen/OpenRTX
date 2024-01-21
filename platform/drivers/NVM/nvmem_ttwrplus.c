@@ -21,7 +21,9 @@
 #include <zephyr/storage/flash_map.h>
 #include <zephyr/drivers/flash.h>
 #include <interfaces/nvmem.h>
+#include <zephyr/logging/log.h>
 #include "flash_zephyr.h"
+LOG_MODULE_DECLARE(app, CONFIG_LOG_DEFAULT_LEVEL);
 
 ZEPHYR_FLASH_DEVICE_DEFINE(extFlash, flash);
 
@@ -75,14 +77,48 @@ int nvm_readSettings(settings_t *settings)
 {
     (void) settings;
 
-    return -1;
+	int res;
+	const struct flash_area *my_area;
+	int err;	
+    LOG_INF ("NV_readSetting");
+	err = flash_area_open(FIXED_PARTITION_ID(storage_partition), &my_area);
+	if (err != 0) 
+    {
+        return -1;
+    } else 
+    {
+        res=flash_area_read(my_area,FIXED_PARTITION_OFFSET(storage_partition),settings,sizeof(settings));
+		flash_area_close(my_area);
+        return 0;
+    }
+
 }
 
 int nvm_writeSettings(const settings_t *settings)
 {
     (void) settings;
+	int res;
+	const struct flash_area *my_area;
+	int err;	
+    LOG_INF ("NV_WriteSetting")    ;
 
-    return -1;
+	err = flash_area_open(FIXED_PARTITION_ID(storage_partition), &my_area);
+	if (err != 0)
+     {
+        res=flash_area_erase(my_area,FIXED_PARTITION_OFFSET(storage_partition),sizeof(settings));
+        if (res == 0){
+		    flash_area_write(my_area,FIXED_PARTITION_OFFSET(storage_partition),settings,sizeof(settings));
+            return 0;
+        }else
+        {
+            flash_area_close(my_area);    
+            return -1;
+        }
+	} else 
+    {	
+        flash_area_close(my_area);    
+        return -1;
+    }
 }
 
 int nvm_writeSettingsAndVfo(const settings_t *settings, const channel_t *vfo)

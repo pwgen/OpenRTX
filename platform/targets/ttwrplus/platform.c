@@ -25,7 +25,11 @@
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/drivers/led_strip.h>
+//#include <zephyr/device.h>
+#include <zephyr/storage/flash_map.h>
+
 #include <SA8x8.h>
+#include <state.h>
 #include <pmu.h>
 
 #define BUTTON_PTT_NODE DT_NODELABEL(button_ptt)
@@ -104,9 +108,19 @@ void platform_init()
         printk("Error detecting SA868 model");
     }
 }
+void platform_save_settings()
+{
+   	int res,rc,err;
+	const struct flash_area *my_area1;
+	err = flash_area_open(FIXED_PARTITION_ID(storage_partition), &my_area1);
+	rc=flash_area_erase(my_area1,FIXED_PARTITION_OFFSET(storage_partition),0x1000);
+	res= flash_area_write(my_area1,FIXED_PARTITION_OFFSET(storage_partition),&state.settings, sizeof(state.settings));
+	flash_area_close(my_area1);
 
+}
 void platform_terminate()
 {
+    platform_save_settings();
     pmu_terminate();
 }
 

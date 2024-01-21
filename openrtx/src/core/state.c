@@ -29,7 +29,8 @@
 #include <interfaces/platform.h>
 #include <interfaces/nvmem.h>
 #include <interfaces/delays.h>
-
+#include <zephyr/logging/log.h>
+LOG_MODULE_DECLARE(app, CONFIG_LOG_DEFAULT_LEVEL);
 state_t state;
 pthread_mutex_t state_mutex;
 long long int lastUpdate = 0;
@@ -46,6 +47,7 @@ void state_init()
      * Try loading settings from nonvolatile memory and default to sane values
      * in case of failure.
      */
+    LOG_INF("nvram read settings");
     if(nvm_readSettings(&state.settings) < 0)
     {
         state.settings = default_settings;
