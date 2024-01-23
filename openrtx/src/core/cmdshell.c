@@ -508,7 +508,7 @@ static int cmd_radio_nvram(const struct shell *sh, size_t argc, char **argv)
 	char * buffer;
 	int res;
 	int loop;
-	int flash_size=0x4000;
+	int flash_size=0x1000;
 	const struct flash_area *my_area;
 	const struct flash_area *my_area1;
 	int err;	
@@ -553,6 +553,60 @@ static int cmd_radio_nvram(const struct shell *sh, size_t argc, char **argv)
 	
 	return 0;
 }
+
+
+static int cmd_radio_nvramchannel(const struct shell *sh, size_t argc, char **argv)
+{
+	char * buffer;
+	int res;
+	int loop;
+	int flash_size=0x1000;
+	const struct flash_area *my_area;
+	const struct flash_area *my_area1;
+	int err;	
+	char *str="STRINGLOGer\n";
+	shell_print(sh, "Checking nvram");
+ 	LOG_INF("LOG INfo foo state %s ",state.settings.callsign);
+	LOG_WRN("LOG Warn %s", str);
+	err = flash_area_open(FIXED_PARTITION_ID(storage_partition), &my_area1);
+	if (err != 0) {
+		shell_print(sh, "failed");
+		
+	} else {
+		shell_print(sh, "Offset:%x  size:%x",FIXED_PARTITION_OFFSET(storage_partition)+0x1000, FIXED_PARTITION_SIZE(storage_partition));
+	//	shell_print(sh, "label %s ", FLASH_AREA_LABEL_EXISTS(storage_partition));
+		shell_print(sh, "Reading  ");
+		buffer=malloc(flash_size);
+		printf("res read %i\n",flash_area_read(my_area1,FIXED_PARTITION_OFFSET(storage_partition)+0x1000,buffer,flash_size));
+		for (loop=0;loop<32;loop++)
+		{
+			printf("%c",buffer[loop]);
+		}
+		printf("\n");
+		for (loop=0;loop<32;loop++)
+		{
+			printf(":%2x",buffer[loop]);
+		}
+		if (argv[1] != NULL)
+		{
+		shell_print(sh, "write flash");
+		sprintf(buffer,"%s",argv[1]);
+		for (loop=0;loop<32;loop++)
+		{
+			printf(":%2x",buffer[loop]);
+		}
+		res=flash_area_erase(my_area1,FIXED_PARTITION_OFFSET(storage_partition)+0x1000,flash_size);
+		shell_print(sh, "\nres erase %i",res);
+		flash_area_write(my_area1,FIXED_PARTITION_OFFSET(storage_partition)+0x1000,buffer,1024);
+		}
+		free(buffer);
+		flash_area_close(my_area1);
+	}
+	
+	return 0;
+}
+
+
 static int cmd_radio_wrnv(const struct shell *sh, size_t argc, char **argv)
 {
 	char * buffer;
@@ -652,6 +706,7 @@ static int cmd_radio_tone(const struct shell *sh, size_t argc, char **argv)
 	SHELL_CMD(mic, NULL, "Set audio source to mic", cmd_radio_mic),
 	SHELL_CMD(dsp, NULL, "Set audio source DSP", cmd_radio_dsp),
 	SHELL_CMD(nv, NULL, "Checking nvram", cmd_radio_nvram),
+	SHELL_CMD(nvc, NULL, "Checking nvram", cmd_radio_nvramchannel),
 	SHELL_CMD(dtmf, NULL, "Set dtmf register", cmd_radio_dsp),
 	SHELL_CMD(tone, NULL, "Cset tone 1 and tone 2", cmd_radio_tone),
 	SHELL_CMD(loadset, NULL, "Write test 2", cmd_radio_rdnv),

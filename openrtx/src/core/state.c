@@ -90,6 +90,7 @@ void state_init()
 void state_terminate()
 {
     // Never store a brightness of 0 to avoid booting with a black screen
+    LOG_INF("State_Terminate");
     if(state.settings.brightness == 0)
     {
         state.settings.brightness = 5;

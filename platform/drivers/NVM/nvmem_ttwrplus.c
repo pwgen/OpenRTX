@@ -22,6 +22,7 @@
 #include <zephyr/drivers/flash.h>
 #include <interfaces/nvmem.h>
 #include <zephyr/logging/log.h>
+
 #include "flash_zephyr.h"
 LOG_MODULE_DECLARE(app, CONFIG_LOG_DEFAULT_LEVEL);
 
@@ -70,6 +71,22 @@ int nvm_readVfoChannelData(channel_t *channel)
 {
     (void) channel;
 
+	int res;
+	const struct flash_area *my_area;
+	int err;	
+    LOG_INF ("NV_readSetting");
+	err = flash_area_open(FIXED_PARTITION_ID(storage_partition)+0x1000, &my_area);
+	if (err != 0) 
+    {
+        return -1;
+    } else 
+    {
+        res=flash_area_read(my_area,FIXED_PARTITION_OFFSET(storage_partition)+0x1000,channel,sizeof(channel_t));
+		flash_area_close(my_area);
+        LOG_INF ("NV_readvfo OK")    ;
+        return 0;
+    }
+
     return -1;
 }
 
@@ -87,7 +104,7 @@ int nvm_readSettings(settings_t *settings)
         return -1;
     } else 
     {
-        res=flash_area_read(my_area,FIXED_PARTITION_OFFSET(storage_partition),settings,sizeof(settings));
+        res=flash_area_read(my_area,FIXED_PARTITION_OFFSET(storage_partition),settings,sizeof(settings_t));
 		flash_area_close(my_area);
         return 0;
     }
@@ -105,9 +122,10 @@ int nvm_writeSettings(const settings_t *settings)
 	err = flash_area_open(FIXED_PARTITION_ID(storage_partition), &my_area);
 	if (err != 0)
      {
-        res=flash_area_erase(my_area,FIXED_PARTITION_OFFSET(storage_partition),sizeof(settings));
+        res=flash_area_erase(my_area,FIXED_PARTITION_OFFSET(storage_partition),0x1000); // flash minimum erase size=4+96
         if (res == 0){
-		    flash_area_write(my_area,FIXED_PARTITION_OFFSET(storage_partition),settings,sizeof(settings));
+		    flash_area_write(my_area,FIXED_PARTITION_OFFSET(storage_partition),settings,sizeof(settings_t));
+            LOG_INF ("NV_WriteSetting OK")    ;
             return 0;
         }else
         {
@@ -125,6 +143,34 @@ int nvm_writeSettingsAndVfo(const settings_t *settings, const channel_t *vfo)
 {
     (void) settings;
     (void) vfo;
+	int res;
+	const struct flash_area *my_area;
+	int err;	
+    LOG_INF ("NV_WriteSetting and vfo")    ;
+
+	err = flash_area_open(FIXED_PARTITION_ID(storage_partition), &my_area);
+	if (err == 0)
+     {
+        LOG_INF ("NV_WriteSetting and vfo OPEN OK")    ;
+        res=flash_area_erase(my_area,FIXED_PARTITION_OFFSET(storage_partition),0x2000); // flash minimum erase size=4+96
+        if (res == 0){
+		    res=flash_area_write(my_area,FIXED_PARTITION_OFFSET(storage_partition),settings,sizeof(settings_t));
+            err=flash_area_write(my_area,FIXED_PARTITION_OFFSET(storage_partition)+0x1000,vfo,sizeof(channel_t));
+            LOG_INF ("NV_WriteSetting and vfo   %i %i ",res,err)    ;
+            return 0;
+        }else
+        {
+             LOG_INF ("NV_WriteSetting and vfo Erase Failed %i",err)    ;
+
+            flash_area_close(my_area);    
+            return -1;
+        }
+	} else 
+    {	
+        LOG_INF ("NV_WriteSetting and vfo open Failed %i",err)    ;
+        flash_area_close(my_area);    
+        return -1;
+    }
 
     return -1;
 }
